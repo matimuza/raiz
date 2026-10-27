@@ -215,7 +215,7 @@ async function handleOccInsert(user: any, payload: any) {
     created_by: user.id, tenant_id: user.tenant_id,
   };
   const { data: inserted, error } = await db.from('occs').insert(row).select().single();
-  if (error) return err('server_error', 'No se pudo guardar la OCC', 500);
+  if (error) { console.error('occ.insert failed:', JSON.stringify(error)); return err('server_error', 'No se pudo guardar la OCC', 500); }
   return json({ occ: inserted });
 }
 
