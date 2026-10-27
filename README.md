@@ -25,12 +25,25 @@ o directamente abriendo `index.html` con doble clic (modo `file://`, soportado i
 
 Por defecto pega contra el backend de producción (`SUPA_URL` hardcodeado en `app.js`). Para apuntar a otro entorno, definí `window.RAIZ_API_URL` antes de que cargue `app.js` (por ejemplo agregando un `<script>window.RAIZ_API_URL='...'</script>` justo antes del `<script src="app.js">` en `index.html`, sin commitear ese cambio).
 
+## Desarrollo, lint y tests
+
+Requiere Node (usado solo para tooling — el frontend sigue sin build step).
+
+```bash
+npm install
+npm run lint   # ESLint sobre app.js
+npm test       # smoke tests con Playwright (mockean el backend, no tocan Supabase real)
+```
+
+CI corre lint + tests en cada push y PR a `main` (`.github/workflows/ci.yml`). `main` está protegida: todo cambio pasa por PR y el check de CI tiene que estar en verde antes de poder mergear.
+
 ## Estado del proyecto
 
-- Sin tests automatizados ni linter todavía.
-- Sin CI/CD: el deploy actual (Vercel/Netlify) no está conectado a este repo — ver roadmap.
+- Deploy: Netlify, conectado a este repo (`main` → auto-deploy).
+- CI: lint + smoke tests en cada push/PR, obligatorio para mergear a `main`.
 - Sin separación de entornos (dev/staging/prod comparten el mismo backend de Supabase).
+- Cobertura de tests mínima (solo smoke tests de carga y login) — falta cubrir el flujo completo de creación de OCC y el resto de las reglas de negocio.
 
 ## Roadmap
 
-Ver conversación de planificación técnica (no versionada todavía en este repo). Fases en curso: conectar CI/CD al deploy existente, tests mínimos, auditoría de seguridad multi-tenant, documentación de arquitectura.
+Fases: ✅ reorganización + bugs críticos, ✅ CI mínimo (lint + tests + deploy conectado), → auditoría de seguridad multi-tenant, → separación de entornos, → documentación de arquitectura para onboarding.
