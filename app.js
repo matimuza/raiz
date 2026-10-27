@@ -2012,15 +2012,15 @@ function globalSearch(q){
     (o.area||'').toLowerCase().includes(ql)
   ).slice(0,7);
   if(!results.length){
-    box.innerHTML = `<div class="tsr-empty">Sin resultados para "${q}"</div>`;
+    box.innerHTML = `<div class="tsr-empty">Sin resultados para "${esc(q)}"</div>`;
   } else {
     const stColors = {open:'var(--orange)',closed:'var(--accent)',analysis:'var(--blue)'};
     box.innerHTML = results.map(o=>`
       <div class="tsr-item" onclick="closeGlobalSearch();openOCCDetail(${o.id})">
         <span class="tsr-num">N° ${o.num}</span>
         <div style="flex:1;min-width:0">
-          <div class="tsr-prob">${o.problem.length>60?o.problem.slice(0,59)+'…':o.problem}</div>
-          <div class="tsr-meta">${o.area} · ${o.responsable}</div>
+          <div class="tsr-prob">${esc(o.problem.length>60?o.problem.slice(0,59)+'…':o.problem)}</div>
+          <div class="tsr-meta">${esc(o.area)} · ${esc(o.responsable)}</div>
         </div>
         <span style="width:8px;height:8px;border-radius:50%;background:${stColors[o.status]||'var(--border2)'};flex-shrink:0"></span>
       </div>`).join('');
@@ -2307,8 +2307,8 @@ function renderDashboard(){
       return `<div class="db-recent-row" onclick="openOCCDetail(${o.id})">
         <span class="db-recent-num">N° ${o.num}</span>
         <div style="min-width:0">
-          <div class="db-recent-prob">${o.problem.length>52?o.problem.slice(0,51)+'…':o.problem}</div>
-          <div class="db-recent-resp">${o.date} · ${o.responsable}</div>
+          <div class="db-recent-prob">${esc(o.problem.length>52?o.problem.slice(0,51)+'…':o.problem)}</div>
+          <div class="db-recent-resp">${esc(o.date)} · ${esc(o.responsable)}</div>
         </div>
         <span class="db-recent-step ${isOpen?'open-step':''}">${step}</span>
       </div>`;
@@ -2404,8 +2404,8 @@ function renderTable(occs){
       return `<tr onclick="openOCCDetail(${o.id})" style="font-size:14px">
         <td style="color:var(--text2);font-family:var(--fm);font-size:11px">${o.date}</td>
         <td class="occ-num">N° ${o.num}</td>
-        <td style="max-width:280px">${o.problem}</td>
-        <td style="color:var(--text2);font-size:12px">${o.responsable}</td>
+        <td style="max-width:280px">${esc(o.problem)}</td>
+        <td style="color:var(--text2);font-size:12px">${esc(o.responsable)}</td>
         <td>${(()=>{const s=occStateLabel(o);return '<span class="pill '+s[0]+'">'+s[1]+'</span>';})()}</td>
         <td>${sim.length>0?`<span class="recur-badge">⟳ ${sim.length+1}x</span>`:'<span style="color:var(--text3);font-size:12px">—</span>'}</td>
       </tr>`;
@@ -2453,8 +2453,8 @@ function renderBarChart(items, color, filterType='prob') {
       const inPareto = it.cumPct <= 80;
       const alpha = inPareto ? '1' : '0.38';
       return `
-      <div class="ins-bar-row" data-filter="${encodeURIComponent(it.label.slice(0,30))}" data-ftype="${filterType}" onclick="barChartClick(this)" title="Ver OCC: ${it.label}">
-        <div class="ins-bar-label" title="${it.label}">${it.label.length > 18 ? it.label.slice(0,17)+'…' : it.label}</div>
+      <div class="ins-bar-row" data-filter="${encodeURIComponent(it.label.slice(0,30))}" data-ftype="${filterType}" onclick="barChartClick(this)" title="Ver OCC: ${esc(it.label)}">
+        <div class="ins-bar-label" title="${esc(it.label)}">${esc(it.label.length > 18 ? it.label.slice(0,17)+'…' : it.label)}</div>
         <div class="ins-bar-track">
           <div class="ins-bar-fill" style="width:${fillW}%;background:${color};opacity:${alpha}">
             <span class="ins-bar-fill-val">${it.value}</span>
@@ -2664,10 +2664,10 @@ function renderUsers(){
       const resolved=myOCCs.filter(o=>o.status==='closed').length;
       return `<div class="user-card">
         <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
-          <div class="user-av" style="background:${u.color};color:#000">${u.name.charAt(0).toUpperCase()}</div>
+          <div class="user-av" style="background:${u.color};color:#000">${esc(u.name.charAt(0).toUpperCase())}</div>
           <div>
-            <div class="user-name">${u.name}</div>
-            <div class="user-email">${u.email}</div>
+            <div class="user-name">${esc(u.name)}</div>
+            <div class="user-email">${esc(u.email)}</div>
             ${APP.user.role==='admin' && u.id!==APP.user.id
               ? `<select class="fi" style="font-size:12px;padding:5px 8px;margin-top:4px;max-width:150px" onchange="changeUserRole('${u.id}',this.value)">
                   ${['pendiente','operario','supervisor','admin'].map(r=>`<option value="${r}" ${u.role===r?'selected':''}>${r==='pendiente'?'Pendiente de aprobación':r.charAt(0).toUpperCase()+r.slice(1)}</option>`).join('')}
@@ -2675,7 +2675,7 @@ function renderUsers(){
               : `<span class="role-badge ${u.role}">${u.role==='pendiente'?'pendiente':u.role}</span>`}
           </div>
         </div>
-        <div style="font-size:12px;color:var(--text2);margin-bottom:10px">${u.area} · ${u.company||'Retak'}</div>
+        <div style="font-size:12px;color:var(--text2);margin-bottom:10px">${esc(u.area)} · ${esc(u.company||'Retak')}</div>
         <div class="user-stats">
           <div class="user-stat"><div class="user-stat-val" style="color:var(--accent)">${myOCCs.length}</div><div class="user-stat-lbl">${tl.occByUser}</div></div>
           <div class="user-stat"><div class="user-stat-val" style="color:var(--green)">${resolved}</div><div class="user-stat-lbl">${tl.resolvedByUser}</div></div>
@@ -2739,8 +2739,8 @@ function renderNotifications(){
     <div class="alert-item ${n.type}" data-notif-id="${n.id}" data-occ-id="${n.occId||''}" data-filter="${n.filterText||''}" onclick="notifClick(this)" style="cursor:pointer;border-radius:10px;transition:background .15s" onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''">
       <span style="font-size:16px">${n.icon}</span>
       <div class="ai-text" style="flex:1">
-        <strong>${n.title}</strong>
-        <span>${n.body}</span>
+        <strong>${esc(n.title)}</strong>
+        <span>${esc(n.body)}</span>
         <div class="notif-time">${n.time} · <span style="color:var(--accent);font-size:10px">→ Ver OCC</span></div>
       </div>
       ${!n.read?`<div style="width:7px;height:7px;border-radius:50%;background:var(--accent);flex-shrink:0;margin-top:5px"></div>`:''}
@@ -2758,8 +2758,8 @@ function renderNotifPanel(){
   ${notifs.length===0?`<div class="notif-empty">${tl.noNotifs}</div>`:
     notifs.slice().reverse().slice(0,8).map(n=>`
     <div class="notif-item ${n.read?'':'unread'}">
-      <div class="notif-title">${n.icon} ${n.title}</div>
-      <div class="notif-body">${n.body}</div>
+      <div class="notif-title">${n.icon} ${esc(n.title)}</div>
+      <div class="notif-body">${esc(n.body)}</div>
       <div class="notif-time">${n.time}</div>
     </div>`).join('')}`;
 }
@@ -3596,7 +3596,7 @@ function renderWStepProblem(){
     <p style="font-size:12px;color:var(--text2);margin-bottom:10px">${tl.similarSub}</p>
     ${sim.map(o=>`
     <div class="sim-item" onclick="openOCCDetail(${o.id})">
-      <div><div class="sim-prob">${o.problem}</div><div class="sim-meta">N° ${o.num} · ${o.date}</div></div>
+      <div><div class="sim-prob">${esc(o.problem)}</div><div class="sim-meta">N° ${o.num} · ${esc(o.date)}</div></div>
       <span style="font-size:11px;color:var(--blue);font-family:var(--fm)">→ Ver</span>
     </div>`).join('')}
   </div>`:'' }
@@ -5355,9 +5355,9 @@ function renderSimilarOCCPanel(query){
     const topWhy = o.whys&&o.whys.length&&o.whys[0].answers ? o.whys[0].answers.filter(Boolean).slice(-1)[0]||'—' : '—';
     return `
     <div class="similar-occ-item" onclick="openOCCDetail(${o.id});return false;">
-      <div class="similar-occ-num">N° ${o.num} · ${o.area||''} · ${o.date||''}</div>
-      <div class="similar-occ-prob">${o.problem}</div>
-      <div class="similar-occ-cause">↳ Causa raíz: <strong>${topCause}</strong> — ${topWhy}</div>
+      <div class="similar-occ-num">N° ${o.num} · ${esc(o.area||'')} · ${esc(o.date||'')}</div>
+      <div class="similar-occ-prob">${esc(o.problem)}</div>
+      <div class="similar-occ-cause">↳ Causa raíz: <strong>${esc(topCause)}</strong> — ${esc(topWhy)}</div>
       <span class="similar-occ-result ${imp[0]}">${imp[1]}</span>
     </div>`;
   }).join('');
