@@ -59,7 +59,7 @@ function getPlan(){ return (APP.user && APP.user.plan) || LS.get('plan') || 'fre
 function setPlan(p){ LS.set('plan', p); }
 function isFreePlan(){ return false; } // beta: sin límite de OCC
 
-function getUserOCCs(){ return (APP._occs||[]).filter(o => o.created_by !== undefined); }
+function getUserOCCs(){ return (APP._occs||[]).filter(o => o.createdBy !== undefined); }
 function userOCCCount(){ return (APP._occs||[]).filter(o => o.id > 1000000).length; }
 
 const LS = {
@@ -524,7 +524,7 @@ function getDefaultOCCs(){
   {
     "id": 4,
     "num": 4,
-    "date": "A (Análisi",
+    "date": "2024-10-05",
     "problem": "Ladrillos fuera de medidas en corte longitudinal",
     "responsable": "Obeid Yair",
     "area": "Calidad",
@@ -861,7 +861,7 @@ function getDefaultOCCs(){
   {
     "id": 11,
     "num": 11,
-    "date": "A (Análisi",
+    "date": "2024-10-25",
     "problem": "Moldes fisurados",
     "responsable": "Héctor Akerman",
     "area": "Producción",
@@ -2704,7 +2704,7 @@ function notifClick(el){
     // Fallback: extract OCC number from title text (e.g. "Acción vencida — OCC N° 21")
     const titleEl = el.querySelector('strong');
     const titleTxt = titleEl ? titleEl.textContent : '';
-    const match = titleTxt.match(/#(\d+)/);
+    const match = titleTxt.match(/N[°º]\s*(\d+)/);
     if(match){
       const occNum = parseInt(match[1]);
       const occs = getOCCs();
@@ -3662,67 +3662,6 @@ function renderWStepProblem(){
 }
 
 
-// ── AI Ishikawa Suggestions ───────────────────────────────────────────────────
-async function loadIshikawaAI(){
-  const d = APP.wizardData;
-  const c = d.ctx;
-
-  // Build context summary for the AI
-  const contextSummary = [
-    c.objeto      && `Objeto/proceso afectado: ${c.objeto}`,
-    c.condActual  && `Condición actual: ${c.condActual}`,
-    c.condEsperada&& `Condición esperada: ${c.condEsperada}`,
-    c.deteccion   && `Cómo se detectó: ${c.deteccion}`,
-    c.cantidad    && !c.cantidadNA && `Cantidad afectada: ${c.cantidad} unidades`,
-    c.impactoTiempo && !c.impactoTiempoNA && `Tiempo de impacto: ${c.impactoTiempo} min`,
-    c.reincidencia && `Primera vez: ${c.reincidencia==='si'?'Sí':'No, ya ocurrió antes'}`,
-    c.turnosNo    && !c.turnosNoNA && `NO ocurre en turnos: ${c.turnosNo}`,
-    c.areasNo     && !c.areasNoNA && `NO ocurre en áreas: ${c.areasNo}`,
-    d.problem     && `Título del problema: ${d.problem}`,
-  ].filter(Boolean).join('\n');
-
-  if(!contextSummary.trim()){ return; }
-
-  // Show loading state in all cats
-  const cats = ['maquinaria','mano','medio','materiales','metodos','otros'];
-  cats.forEach(k=>{
-    const el = document.getElementById(`ishi-ai-${k}`);
-    if(el) el.innerHTML = `<div class="ishi-ai-loading"><span class="ai-spin">⟳</span> Generando hipótesis para esta categoría...</div>`;
-  });
-
-  const prompt = `Sos un experto en análisis de causa raíz industrial (metodología Ishikawa 6M).
-
-Dado el siguiente contexto de un problema de planta:
-${contextSummary}
-
-Generá causas posibles agrupadas por las 6M de Ishikawa. Para cada categoría, sugerí entre 2 y 4 causas ESPECÍFICAS y CONCRETAS para este problema en particular — no genéricas.
-Las causas deben ser hipótesis plausibles basadas en el contexto dado, redactadas como hechos observables (no como preguntas).
-
-IMPORTANTE: Respondé SOLO con un JSON sin markdown ni backticks, con esta estructura exacta:
-{
-  "maquinaria": ["causa 1","causa 2"],
-  "mano": ["causa 1","causa 2"],
-  "medio": ["causa 1","causa 2"],
-  "materiales": ["causa 1","causa 2"],
-  "metodos": ["causa 1","causa 2"],
-  "otros": ["causa 1","causa 2"]
-}`;
-
-  try {
-    const raw = (await callClaude(prompt, 1000)) || '{}';
-    const clean = raw.replace(/```json|```/g,'').trim();
-    const suggestions = JSON.parse(clean);
-    APP.wizardData.ishiSuggestions = suggestions;
-    renderIshiChips();
-  } catch(e){
-    cats.forEach(k=>{
-      const el = document.getElementById(`ishi-ai-${k}`);
-      if(el) el.innerHTML = '';
-    });
-  }
-}
-
-
 function selectDeteccion(idx){
   const opts = t().ctx_deteccionOpts;
   const val = opts[idx];
@@ -3740,45 +3679,6 @@ function selectReincidencia(val){
   if(typeof scheduleCtxAI === 'function') scheduleCtxAI();
   renderContent();
 }
-function renderIshiChips(){
-  const sugg = APP.wizardData.ishiSuggestions || {};
-  const d = APP.wizardData;
-  Object.entries(sugg).forEach(([cat, chips])=>{
-    const el = document.getElementById(`ishi-ai-${cat}`);
-    if(!el || !chips?.length) return;
-    // Check which are already used as causes
-    const existing = (d.causes[cat]||[]).map(v=>v.trim().toLowerCase());
-    el.innerHTML = `
-      <div class="ishi-ai-label">
-        <span class="ai-dot"></span> Sugerencias IA
-      </div>
-      <div class="ishi-chips">
-        ${chips.map(chip=>{
-          const used = existing.includes(chip.trim().toLowerCase());
-          return `<button class="ishi-chip${used?' used':''}"
-            onclick="addIshiChip('${cat}','${chip.replace(/'/g,"&#39;")}')"
-            ${used?'disabled':''}>
-            ${used?'✓ ':'+  '}${chip}
-          </button>`;
-        }).join('')}
-      </div>`;
-  });
-}
-
-function addIshiChip(cat, text){
-  const d = APP.wizardData;
-  // Find first empty slot or add new row
-  const idx = d.causes[cat].findIndex(v=>!v||!v.trim());
-  if(idx>=0){
-    d.causes[cat][idx] = text;
-  } else {
-    d.causes[cat].push(text);
-  }
-  renderContent();
-  // Re-render chips to mark as used
-  setTimeout(renderIshiChips, 50);
-}
-
 function renderWStep1(){
   const tl=t(); const d=APP.wizardData;
   const sugg=d.ishiSuggestions;
@@ -4739,9 +4639,16 @@ function cleanChainForSave(w){return {id:w.id,cause:w.cause,tipo:w.tipo,levels:w
 
 function buildChains(d){
   const existing=d.whys||[];
+  const claimed=new Set();
   const fallas=d.selectedCauses.filter(k=>getCauseVal(k).trim()).map(k=>{
     const val=getCauseVal(k);
-    return existing.find(w=>w.tipo!=='respuesta'&&w.cause===val)||newChain(val,'falla');
+    const p=k.split(':'); const vk=p[0]+':'+p[1];
+    // match by stable cat:idx key first; fall back to text match only for
+    // legacy chains (loaded from a saved OCC) that don't have srcKey yet
+    let match=existing.find(w=>w.tipo!=='respuesta'&&!claimed.has(w)&&w.srcKey===vk);
+    if(!match) match=existing.find(w=>w.tipo!=='respuesta'&&!claimed.has(w)&&!w.srcKey&&w.cause===val);
+    if(match){ claimed.add(match); match.srcKey=vk; match.cause=val; return match; }
+    const c=newChain(val,'falla'); c.srcKey=vk; return c;
   });
   if(needsRespChain(d.ctx)){
     const label='La parada duró '+ctxTiempo(d.ctx)+' min'+((d.ctx.demora||'').trim()?': '+d.ctx.demora.trim():'');
