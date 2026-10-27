@@ -6413,7 +6413,7 @@ function renderWStep1(){
       <div class="ci-row">
         <span class="ci-n">${i+1}</span>
         <input class="ci" type="text" value="${v}" placeholder="${APP.lang==='es'?'Causa posible...':'Possible cause...'}"
-          oninput="APP.wizardData.causes['${key}'][${i}]=this.value">
+          oninput="updateCauseText('${key}',${i},this.value)">
         <button class="sel-btn ${isCauseSelected(key,i,v)?'on':''}" onclick="toggleCause('${key}',${i})" title="${APP.lang==='es'?'Seleccionar':'Select'}">✓</button>
       </div>`).join('')}
       <button onclick="addCauseRow('${key}')" style="background:none;border:none;color:var(--text3);font-size:12px;cursor:pointer;padding:3px 0;margin-top:2px">+ ${APP.lang==='es'?'agregar':'add'}</button>
@@ -6664,8 +6664,8 @@ async function saveNewOCC(){
     } else {
       const newNum=occs.length>0?Math.max(...occs.map(o=>o.num||0))+1:1;
       const newOCC=Object.assign({id:Date.now(),num:newNum,impact:null,evidencia:'',learning:'',created_by:APP.user.id,tenant_id:APP._tenant?.id},fields);
-      await SB.insert('occs',newOCC);
-      APP._occs=[...occs,{...newOCC,createdBy:newOCC.created_by}];
+      const inserted=await SB.insert('occs',newOCC);
+      APP._occs=[...occs,normalizeOCC(inserted||newOCC)];
       toast(`OCC N° ${newNum} guardada y enviada a revisión`,'success');
     }
     generateAlertNotifs();
@@ -6927,6 +6927,14 @@ function highlightEmpty(ids){
 }
 
 // cause helpers
+function updateCauseText(cat,idx,newVal){
+  const d=APP.wizardData;
+  const oldVal=d.causes[cat][idx];
+  const oldKey=cat+':'+idx+':'+oldVal;
+  const pos=d.selectedCauses.indexOf(oldKey);
+  d.causes[cat][idx]=newVal;
+  if(pos>=0) d.selectedCauses[pos]=cat+':'+idx+':'+newVal;
+}
 function isCauseSelected(cat,idx,val){
   if(!val.trim()) return false;
   return APP.wizardData.selectedCauses.includes(cat+':'+idx+':'+val);
@@ -7854,13 +7862,17 @@ function exportPDF(id){
 
   // ── PROBLEM DESCRIPTION ───────────────────────────────────────────────────
   section('Formulación del Problema');
+  const c=o.context||{};
+  const det=Array.isArray(c.deteccion)?c.deteccion.join(', '):(c.deteccion||'');
   const desc=[
-    o.que    && ['QUÉ ocurrió', o.que],
-    o.donde  && ['DÓNDE', o.donde],
-    o.cuando && ['CUÁNDO', o.cuando],
-    o.cuantas&& ['MAGNITUD', o.cuantas],
-    o.bajo   && ['CONDICIONES', o.bajo],
-    o.queNo  && ['QUÉ NO ocurrió', o.queNo],
+    c.objeto      && ['Objeto/proceso afectado', c.objeto],
+    c.condActual  && ['Condición actual', c.condActual],
+    c.condEsperada&& ['Condición esperada', c.condEsperada],
+    det           && ['Cómo se detectó', det],
+    (c.cantidad&&!c.cantidadNA) && ['Cantidad afectada', c.cantidad+' unidades'],
+    ctxTiempo(c)  && ['Tiempo de parada', ctxTiempo(c)+' min'],
+    c.contencion  && ['Contención', c.contencion],
+    c.demora      && ['Qué demoró la reposición', c.demora],
   ].filter(Boolean);
   desc.forEach(([lbl,val])=>{
     checkPage();
