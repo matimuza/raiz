@@ -4714,24 +4714,24 @@ function whyConfirm(wi){
   if(w.levels.length>=3) w.decision=true;
   renderContent();
 }
-function whyDecide(wi,val){
+async function whyDecide(wi,val){
   const w=APP.wizardData.whys[wi];
   if(val==='gestion'){
     const last=chainRoot(w);
     if(looksTechnical(last)&&!looksManagement(last)){
-      if(!confirm('El último porqué parece describir una pieza, un desgaste o un síntoma, no una decisión, regla o control que faltaba.\n\n¿Seguro que es la causa de gestión?')) return;
+      if(!await raConfirm('El último porqué parece describir una pieza, un desgaste o un síntoma, no una decisión, regla o control que faltaba.\n\n¿Seguro que es la causa de gestión?',{confirmText:'Sí, es causa de gestión'})) return;
     }
     w.cierre='gestion'; w.decision=false;
   } else if(val==='tecnica'){
-    if(!confirm('La cadena queda cerrada como causa técnica y tu supervisor la va a ver observada. ¿Seguir?')) return;
+    if(!await raConfirm('La cadena queda cerrada como causa técnica y tu supervisor la va a ver observada. ¿Seguir?',{confirmText:'Seguir'})) return;
     w.cierre='tecnica'; w.decision=false;
   } else {
     w.decision=false;
   }
   renderContent();
 }
-function whyEditFrom(wi,li){
-  if(!confirm('Se borran este porqué y los siguientes de la cadena. ¿Seguir?')) return;
+async function whyEditFrom(wi,li){
+  if(!await raConfirm('Se borran este porqué y los siguientes de la cadena. ¿Seguir?',{confirmText:'Borrar y seguir',danger:true})) return;
   const w=APP.wizardData.whys[wi];
   const removed=w.levels[li];
   w.levels=w.levels.slice(0,li); w.cierre=null; w.decision=false; w.hyps=null; w.hypsFor=-1;
@@ -4861,6 +4861,9 @@ function occSostenido(o){
 
 function openOCCDetail(id){
   const o=getOCCs().find(x=>x.id===id); if(!o) return;
+  // Se reinvoca tras cada acción (medición, marcar hecha, etc.) y rearma
+  // el modal desde cero — sin esto, cada click te mandaba arriba del todo.
+  const prevScroll = document.querySelector('#modals .modal')?.scrollTop || 0;
   const tl=t(); const c=o.context||{}; const r=c.raiz||{}; const rv=r.review||{};
   const st=occStateLabel(o);
   const checks=qualityChecks(qualityFromOCC(o)); const allOk=checks.every(x=>x.ok);
@@ -4981,6 +4984,8 @@ function openOCCDetail(id){
       </div>
     </div>
   </div>`;
+  const modalEl = document.querySelector('#modals .modal');
+  if(modalEl) modalEl.scrollTop = prevScroll;
 }
 
 async function submitForReview(id){
@@ -4990,7 +4995,7 @@ async function submitForReview(id){
 async function approveOCC(id){
   const o=getOCCs().find(x=>x.id===id); if(!o) return;
   if(!qualityChecks(qualityFromOCC(o)).every(x=>x.ok)){toast('Hay puntos del control sin cumplir','warning');return;}
-  if(isOCCCreator(o)&&!confirm('Vas a aprobar una OCC que cargaste vos. Lo ideal es que la revise otra persona. ¿Aprobar igual?')) return;
+  if(isOCCCreator(o)&&!await raConfirm('Vas a aprobar una OCC que cargaste vos. Lo ideal es que la revise otra persona.\n\n¿Aprobar igual?',{confirmText:'Aprobar igual'})) return;
   const com=(document.getElementById('rv-comment')?.value||'').trim();
   const ok=await patchOCC(id,(o,r)=>{const now=nowISO();const rv=r.review||{};rv.historial=(rv.historial||[]).concat([{accion:'aprobada',por:APP.user.name,fecha:now,comentario:com}]);rv.estado='aprobada';rv.aprobadaPor=APP.user.name;rv.fecha=now;r.review=rv;});
   if(ok){toast('Análisis aprobado. Ahora se mide.','success');openOCCDetail(id);renderContent();}
@@ -5068,11 +5073,39 @@ async function confirmCloseOCC(occId){
 
 function closeModal(){document.getElementById('modals').innerHTML='';}
 
+// Reemplaza al confirm() nativo del navegador (sin estilo, rompe la
+// experiencia visual) por un modal propio. Se apila sobre #modals en vez de
+// usarlo, para no pisar un modal de detalle que ya esté abierto debajo.
+function raConfirm(message, opts={}){
+  return new Promise(resolve=>{
+    const confirmText = opts.confirmText || 'Confirmar';
+    const cancelText = opts.cancelText || 'Cancelar';
+    const el = document.createElement('div');
+    el.className = 'overlay';
+    el.style.zIndex = '10000';
+    el.innerHTML = `
+      <div class="modal" style="max-width:420px">
+        <div class="ra-confirm-msg">${esc(message)}</div>
+        <div class="modal-actions" style="margin-top:18px;justify-content:flex-end">
+          <button class="btn-sec" data-act="cancel">${esc(cancelText)}</button>
+          <button class="btn-primary ra-confirm-ok${opts.danger?' danger':''}" style="width:auto;margin-top:0" data-act="ok">${esc(confirmText)}</button>
+        </div>
+      </div>`;
+    const finish = (val) => { el.remove(); resolve(val); };
+    el.addEventListener('click', e=>{
+      if(e.target===el){ finish(false); return; }
+      const act = e.target.closest('[data-act]');
+      if(act) finish(act.dataset.act==='ok');
+    });
+    document.body.appendChild(el);
+  });
+}
+
 async function deleteOCC(id){
   const occs = getOCCs();
   const o = occs.find(x=>x.id===id);
   if(!o) return;
-  if(!confirm(`¿Eliminar OCC N° ${o.num} "${o.problem.slice(0,40)}"? Esta acción no se puede deshacer.`)) return;
+  if(!await raConfirm(`¿Eliminar OCC N° ${o.num} "${o.problem.slice(0,40)}"?\n\nEsta acción no se puede deshacer.`,{confirmText:'Eliminar',danger:true})) return;
   try {
     await SB.delete('occs', id);
     APP._occs = occs.filter(x=>x.id!==id);
