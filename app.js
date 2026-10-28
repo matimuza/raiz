@@ -1952,7 +1952,18 @@ function renderContent(){
   else if(APP.view==='insights') el.innerHTML = renderInsights();
   else if(APP.view==='users') el.innerHTML = renderUsers();
   else if(APP.view==='notifications') el.innerHTML = renderNotifications();
-  else if(APP.view==='wizard') { el.innerHTML = renderWizard(); el.style.background='var(--bg)'; injectAssistantOverlay(APP.wizardStep); attachAutoResize(); }
+  else if(APP.view==='wizard') {
+    el.innerHTML = renderWizard(); el.style.background='var(--bg)'; injectAssistantOverlay(APP.wizardStep); attachAutoResize();
+    // Delegado una sola vez: cualquier campo del wizard cuenta como
+    // actividad, no solo los 3 que llamaban raUserActivity() a mano.
+    // Antes, escribir/pararse en cualquier otro campo no reseteaba el
+    // reloj de inactividad y la burbuja aparecía igual.
+    if(!el._raActivityBound){
+      el._raActivityBound = true;
+      el.addEventListener('input', raUserActivity);
+      el.addEventListener('focusin', raUserActivity);
+    }
+  }
   document.body.classList.toggle('wizard-active', APP.view==='wizard');
   updateTopbar();
   renderBottomNav();
@@ -3533,8 +3544,17 @@ function renderWStep0(){
       </div>
     </div>
 
-    <!-- AI MONITOR PANEL -->
-    <div class="ctx-ai-panel" id="ctx-ai-panel">
+    ${renderCtxAiPanel(d)}
+
+  </div>`;
+}
+
+// Separado de renderWStep0 para poder refrescarlo solo (sin reemplazar todo
+// el formulario) y no perder el foco del campo donde el usuario está
+// escribiendo cuando termina el chequeo de IA con debounce.
+function renderCtxAiPanel(d){
+  const aiState = d.ctxAiStatus||'';
+  return `<div class="ctx-ai-panel" id="ctx-ai-panel">
       <div class="ctx-ai-panel-header ${aiState}">
         <span class="ai-badge">${aiState==='checking'?'PROCESANDO':aiState==='ok'?'VALIDADO':aiState==='warn'?'REVISAR':'MOTOR IA'}</span>
         <span class="ai-status-text">
@@ -3559,8 +3579,13 @@ function renderWStep0(){
             <span>${f.msg}</span>
           </div>`).join('')}</div>`;
       })()}
-
   </div>`;
+}
+
+function updateCtxAiPanel(){
+  const el = document.getElementById('ctx-ai-panel');
+  if(el) el.outerHTML = renderCtxAiPanel(APP.wizardData);
+  else renderContent();
 }
 
 function renderWStepProblem(){
@@ -4330,7 +4355,7 @@ async function runCtxAI(){
 
   d.ctxAiStatus = 'checking';
   d.ctxAiFindings = [];
-  renderContent();
+  updateCtxAiPanel();
 
   const det = Array.isArray(c.deteccion) ? c.deteccion.join(', ') : (c.deteccion||'');
   const detFull = det + (c.deteccionOtro ? ` (${c.deteccionOtro})` : '');
@@ -4383,7 +4408,7 @@ Respondé SOLO con este JSON (sin markdown, sin texto extra):
     d.ctxAiStatus = 'idle';
     d.ctxAiFindings = [];
   }
-  renderContent();
+  updateCtxAiPanel();
 }
 
 // ── AI Problem Draft Generator ────────────────────────────────────────────────
