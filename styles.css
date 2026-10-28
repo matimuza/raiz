@@ -310,8 +310,8 @@ body{background:var(--bg);color:var(--text);font-family:var(--fb);font-size:15px
 
 /* ── FORM ── */
 .fl{display:block;font-size:11px;font-family:var(--fm);color:var(--text2);text-transform:uppercase;letter-spacing:.07em;margin-bottom:7px;}
-.fi{width:100%;background:#fff;border:2px solid var(--border2);border-radius:9px;padding:12px 14px;color:var(--text);font-family:var(--fb);font-size:14px;outline:none;transition:border-color .2s, box-shadow .2s;box-shadow:0 1px 4px rgba(0,0,0,.06);}
-.fi:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(0,184,148,.12);background:#fff;}
+.fi{width:100%;background:var(--surface);border:2px solid var(--border2);border-radius:9px;padding:12px 14px;color:var(--text);font-family:var(--fb);font-size:14px;outline:none;transition:border-color .2s, box-shadow .2s;box-shadow:0 1px 4px rgba(0,0,0,.06);}
+.fi:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(0,184,148,.12);background:var(--surface);}
 .fi::placeholder{color:var(--text3);font-style:italic;font-size:13px;opacity:.7;}
 textarea.fi{resize:none;min-height:62px;line-height:1.55;overflow:hidden;}
 select.fi{cursor:pointer;}
