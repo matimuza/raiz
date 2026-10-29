@@ -9,6 +9,7 @@ const APP = {
   navHistory: [],  // view history stack
   wizardData: {},
   notifOpen: false,
+  resetToken: null,
 };
 
 // ═══════════════════════════════════════════════════════
@@ -1624,20 +1625,45 @@ function renderAuth(){
           <div><strong>Instalar Raíz en tu dispositivo</strong><span>Funciona offline · Como app nativa</span></div>
         </div>
 
-        <div class="auth-box-title">${isLogin
-          ? (APP.lang==='es'?'Bienvenido':'Welcome back')
+        <div class="auth-box-title">${
+          tab==='forgot' ? (APP.lang==='es'?'Recuperar acceso':'Reset access')
+          : tab==='resetPassword' ? (APP.lang==='es'?'Elegí una nueva contraseña':'Choose a new password')
+          : isLogin ? (APP.lang==='es'?'Bienvenido':'Welcome back')
           : (APP.lang==='es'?'Crear cuenta':'Create account')}</div>
-        <div class="auth-box-sub">${isLogin
-          ? (APP.lang==='es'?'Ingresá con tus credenciales para continuar.':'Sign in with your credentials to continue.')
+        <div class="auth-box-sub">${
+          tab==='forgot' ? (APP.lang==='es'?'Ingresá tu correo y te mandamos un enlace para recuperar el acceso.':'Enter your email and we will send you a reset link.')
+          : tab==='resetPassword' ? (APP.lang==='es'?'Esta contraseña reemplaza a la anterior en tu cuenta.':'This password replaces the previous one on your account.')
+          : isLogin ? (APP.lang==='es'?'Ingresá con tus credenciales para continuar.':'Sign in with your credentials to continue.')
           : (APP.lang==='es'?'Registrate para acceder al sistema.':'Register to access the system.')}</div>
 
+        ${(tab==='login'||tab==='register') ? `
         <div class="auth-tabs">
           <button class="auth-tab ${tab==='login'?'active':''}" onclick="LS.set('authTab','login');renderAuth()">${tl.login}</button>
           <button class="auth-tab ${tab==='register'?'active':''}" onclick="LS.set('authTab','register');renderAuth()">${tl.register}</button>
-        </div>
+        </div>` : ''}
         <div id="auth-err" class="auth-err"></div>
 
-        ${isLogin ? `
+        ${tab==='forgot' ? `
+          <form id="forgot-form" onsubmit="event.preventDefault();doForgotPassword()" action="#" method="post">
+          <div class="field"><label>${tl.email}</label>
+            <input type="email" id="f-forgot-email" name="email" placeholder="usuario@empresa.com"
+              autocomplete="username email" value="${LS.get('lastEmail')||''}"></div>
+          <button type="submit" class="btn-primary">${APP.lang==='es'?'Enviar enlace':'Send link'}</button>
+          </form>
+          <p style="text-align:center;margin-top:16px;font-size:12px;color:var(--text2)">
+            <span style="color:var(--accent);cursor:pointer;font-weight:600" onclick="LS.set('authTab','login');renderAuth()">
+              ${APP.lang==='es'?'Volver a iniciar sesión':'Back to sign in'}
+            </span>
+          </p>
+        ` : tab==='resetPassword' ? `
+          <form id="reset-form" onsubmit="event.preventDefault();doResetPassword()" action="#" method="post">
+          <div class="field"><label>${APP.lang==='es'?'Nueva contraseña':'New password'}</label>
+            <input type="password" id="f-new-pass" name="password" placeholder="••••••••" autocomplete="new-password"></div>
+          <div class="field"><label>${APP.lang==='es'?'Confirmar contraseña':'Confirm password'}</label>
+            <input type="password" id="f-new-pass2" name="password2" placeholder="••••••••" autocomplete="new-password"></div>
+          <button type="submit" class="btn-primary">${APP.lang==='es'?'Guardar nueva contraseña':'Save new password'}</button>
+          </form>
+        ` : isLogin ? `
           <form id="login-form" onsubmit="event.preventDefault();doLogin()" action="#" method="post">
           <div class="field"><label>${tl.email}</label>
             <input type="email" id="f-email" name="email" placeholder="usuario@empresa.com"
@@ -1645,6 +1671,11 @@ function renderAuth(){
           <div class="field">
             <label>${tl.password}</label>
             <input type="password" id="f-pass" name="password" placeholder="••••••••" autocomplete="current-password">
+          </div>
+          <div style="text-align:right;margin:-10px 0 16px">
+            <span style="color:var(--text2);cursor:pointer;font-size:12px" onclick="LS.set('authTab','forgot');renderAuth()">
+              ${APP.lang==='es'?'¿Olvidaste tu contraseña?':'Forgot your password?'}
+            </span>
           </div>
           <button type="submit" class="btn-primary">${tl.login}</button>
           </form>
@@ -1756,6 +1787,53 @@ async function doRegister(){
 
 function updateTenantHint(form){
   // called on company input change — could also wire to email
+}
+
+function showAuthOk(msg){
+  const el = document.getElementById('auth-err');
+  if(el){ el.style.display='block'; el.style.color='var(--accent)'; el.style.borderColor='rgba(0,184,148,.3)'; el.style.background='rgba(0,184,148,.08)'; el.textContent=msg; }
+}
+
+async function doForgotPassword(){
+  const email = document.getElementById('f-forgot-email')?.value.trim();
+  if(!email){ showAuthErr(t().fillFields); return; }
+  const btn = document.querySelector('.btn-primary');
+  if(btn){ btn.textContent = APP.lang==='es'?'Enviando...':'Sending...'; btn.disabled = true; }
+  try {
+    await api('password.requestReset', { email });
+    LS.set('lastEmail', email);
+    showAuthOk(APP.lang==='es'
+      ? 'Si el correo existe, te enviamos un enlace para recuperar el acceso. Revisá tu bandeja (y spam).'
+      : 'If that email exists, we sent a reset link. Check your inbox (and spam).');
+  } catch(e) {
+    showAuthErr(e.code==='network' ? 'Error de conexión. Verificá tu internet.' : e.message);
+  } finally {
+    if(btn){ btn.textContent = APP.lang==='es'?'Enviar enlace':'Send link'; btn.disabled = false; }
+  }
+}
+
+async function doResetPassword(){
+  const pass = document.getElementById('f-new-pass')?.value;
+  const pass2 = document.getElementById('f-new-pass2')?.value;
+  if(!pass || !pass2){ showAuthErr(t().fillFields); return; }
+  if(pass !== pass2){ showAuthErr(APP.lang==='es'?'Las contraseñas no coinciden':'Passwords do not match'); return; }
+  if(pass.length < 8){ showAuthErr(APP.lang==='es'?'La contraseña debe tener al menos 8 caracteres':'Password must be at least 8 characters'); return; }
+  const btn = document.querySelector('.btn-primary');
+  if(btn){ btn.textContent = APP.lang==='es'?'Guardando...':'Saving...'; btn.disabled = true; }
+  try {
+    await api('password.reset', { token: APP.resetToken, password: pass });
+    APP.resetToken = null;
+    history.replaceState(null, '', location.pathname);
+    LS.set('authTab', 'login');
+    renderAuth();
+    setTimeout(()=>showAuthOk(APP.lang==='es'
+      ? 'Contraseña actualizada. Ingresá con tu nueva contraseña.'
+      : 'Password updated. Sign in with your new password.'), 50);
+  } catch(e) {
+    showAuthErr(e.code==='network' ? 'Error de conexión. Verificá tu internet.' : e.message);
+  } finally {
+    if(btn){ btn.textContent = APP.lang==='es'?'Guardar nueva contraseña':'Save new password'; btn.disabled = false; }
+  }
 }
 
 function showAuthErr(msg){
@@ -5516,6 +5594,14 @@ function importBackup(event){
     const panel = document.getElementById('notif-panel');
     if(!btn && panel && panel.style.display === 'block'){ panel.style.display = 'none'; APP.notifOpen = false; }
   });
+
+  const resetToken = new URLSearchParams(location.search).get('reset');
+  if(resetToken){
+    APP.resetToken = resetToken;
+    LS.set('authTab', 'resetPassword');
+    renderAuth();
+    return;
+  }
 
   if(LS.get('token')){
     document.getElementById('root').innerHTML = `

@@ -12,6 +12,8 @@ export default [
         document: 'readonly',
         navigator: 'readonly',
         location: 'readonly',
+        history: 'readonly',
+        URLSearchParams: 'readonly',
         localStorage: 'readonly',
         sessionStorage: 'readonly',
         fetch: 'readonly',

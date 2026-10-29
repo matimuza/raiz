@@ -15,6 +15,9 @@ const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const RAIZ_SECRET = Deno.env.get('RAIZ_SECRET')!;
 const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY');
+const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY');
+const RESET_EMAIL_FROM = Deno.env.get('RESET_EMAIL_FROM') || 'Raíz <onboarding@resend.dev>';
+const APP_BASE_URL = Deno.env.get('APP_BASE_URL') || 'http://localhost:8888';
 
 const db = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
 
@@ -105,8 +108,8 @@ async function hmac(data: string): Promise<string> {
 }
 
 function publicUser(u: Record<string, unknown>) {
-  // Nunca mandar pass_hash al frontend.
-  const { pass_hash: _pass_hash, ...rest } = u;
+  // Nunca mandar al frontend lo que sirve para autenticar o recuperar acceso.
+  const { pass_hash: _pass_hash, reset_token_hash: _rth, reset_token_expires: _rte, ...rest } = u;
   return rest;
 }
 
@@ -183,6 +186,65 @@ async function handleRegister(payload: any) {
   }
   const token = await signToken({ uid: user.id, exp: Date.now() + TOKEN_TTL_MS });
   return json({ token, user: publicUser(user), tenant });
+}
+
+async function sendResetEmail(email: string, name: string, resetUrl: string) {
+  if (!RESEND_API_KEY) {
+    console.warn('RESEND_API_KEY no configurada; no se envió el mail de reset. URL:', resetUrl);
+    return;
+  }
+  try {
+    const r = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        from: RESET_EMAIL_FROM,
+        to: email,
+        subject: 'Recuperar acceso a Raíz',
+        html: `<p>Hola${name ? ' ' + name : ''},</p>
+<p>Pediste recuperar el acceso a tu cuenta de Raíz. Este enlace vence en 30 minutos:</p>
+<p><a href="${resetUrl}">${resetUrl}</a></p>
+<p>Si no fuiste vos, ignorá este correo — tu contraseña sigue igual.</p>`,
+      }),
+    });
+    if (!r.ok) console.error('Resend respondió', r.status, await r.text());
+  } catch (e) {
+    console.error('Error enviando mail de reset:', e);
+  }
+}
+
+async function handlePasswordRequestReset(payload: any) {
+  const email = String(payload.email || '').trim().toLowerCase();
+  if (!email) return err('bad_request', 'Falta el correo', 400);
+
+  // Responde igual exista o no la cuenta, para no filtrar qué correos están registrados.
+  const { data: user } = await db.from('users').select('id, name').eq('email', email).maybeSingle();
+  if (user) {
+    const rawToken = toHex(crypto.getRandomValues(new Uint8Array(32)));
+    const tokenHash = await hmac(rawToken);
+    const expires = new Date(Date.now() + 30 * 60 * 1000).toISOString();
+    await db.from('users').update({ reset_token_hash: tokenHash, reset_token_expires: expires }).eq('id', user.id);
+    const resetUrl = `${APP_BASE_URL}/?reset=${rawToken}`;
+    await sendResetEmail(email, user.name, resetUrl);
+  }
+  return json({ ok: true });
+}
+
+async function handlePasswordReset(payload: any) {
+  const token = String(payload.token || '');
+  const password = String(payload.password || '');
+  if (!token || !password) return err('bad_request', 'Faltan datos', 400);
+  if (password.length < 8) return err('weak_password', 'La contraseña debe tener al menos 8 caracteres', 400);
+
+  const tokenHash = await hmac(token);
+  const { data: user } = await db.from('users').select('id, reset_token_expires').eq('reset_token_hash', tokenHash).maybeSingle();
+  if (!user || !user.reset_token_expires || new Date(user.reset_token_expires).getTime() < Date.now()) {
+    return err('invalid_token', 'El enlace venció o no es válido. Pedí uno nuevo.', 400);
+  }
+
+  const pass_hash = await hashPassword(password);
+  await db.from('users').update({ pass_hash, reset_token_hash: null, reset_token_expires: null }).eq('id', user.id);
+  return json({ ok: true });
 }
 
 async function handleBoot(user: any) {
@@ -304,6 +366,8 @@ Deno.serve(async (req) => {
 
   if (action === 'login') return handleLogin(body);
   if (action === 'register') return handleRegister(body);
+  if (action === 'password.requestReset') return handlePasswordRequestReset(body);
+  if (action === 'password.reset') return handlePasswordReset(body);
 
   // Todo lo demás requiere token válido.
   const user = await authenticate(req);
